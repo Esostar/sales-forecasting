@@ -223,7 +223,7 @@ else:
             m2.metric("Lower 80%", res["interval_80"]["lower"])
             m3.metric("Upper 80%", res["interval_80"]["upper"])
 
-            hist = pd.read_pickle(PROC / "train.pkl")
+            hist = pd.read_parquet(PROC_DIR / "history_small.parquet")
             s = hist[(hist.store_nbr == store) & (hist.family_code == fam_code)].tail(60)
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=s.date, y=s.sales, name="History"))
