@@ -1,4 +1,4 @@
-"""Build store x family feature matrix for forecasting."""
+"""Build store x family feature matrix for forecasting (v2, with encodings)."""
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -46,6 +46,12 @@ def add_calendar(df):
     df["is_month_start"] = d.is_month_start.astype(np.int8)
     df["is_month_end"] = d.is_month_end.astype(np.int8)
     df["is_payday"] = ((df["day"] == 15) | d.is_month_end).astype(np.int8)
+
+    # Fourier terms for annual seasonality
+    doy = df["date"].dt.dayofyear
+    for k in [1, 2, 3]:
+        df[f"sin_{k}"] = np.sin(2 * np.pi * k * doy / 365.25)
+        df[f"cos_{k}"] = np.cos(2 * np.pi * k * doy / 365.25)
     return df
 
 
@@ -107,6 +113,7 @@ def main():
         "lag_7", "lag_14", "lag_21", "lag_28", "lag_364",
         "roll_mean_7", "roll_mean_14", "roll_mean_28",
         "roll_std_7", "roll_std_14", "roll_std_28",
+        "sin_1", "cos_1", "sin_2", "cos_2", "sin_3", "cos_3",
     ]
     df["target"] = np.log1p(df["sales"])
 
@@ -120,6 +127,8 @@ def main():
     print(f"train: {tr.shape} | test: {te.shape}")
     print(f"train dates: {tr.date.min().date()} -> {tr.date.max().date()}")
     print(f"test  dates: {te.date.min().date()} -> {te.date.max().date()}")
+    print(f"nan in train features: {tr[feature_cols].isna().sum().sum()}")
+    print(f"nan in test  features: {te[feature_cols].isna().sum().sum()}")
 
 
 if __name__ == "__main__":
