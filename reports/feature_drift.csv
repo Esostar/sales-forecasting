@@ -1,0 +1,14 @@
+feature,psi,status
+oil,6.409,DRIFT
+onpromotion,0.2132,WATCH
+lag_364,0.1901,WATCH
+lag_28,0.1341,WATCH
+roll_mean_14,0.1336,WATCH
+lag_21,0.1271,WATCH
+roll_std_14,0.1263,WATCH
+lag_14,0.1198,WATCH
+lag_7,0.1134,WATCH
+roll_mean_28,0.1097,WATCH
+roll_std_28,0.1014,WATCH
+roll_mean_7,0.0825,OK
+roll_std_7,0.077,OK
