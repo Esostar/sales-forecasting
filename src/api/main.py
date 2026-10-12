@@ -33,7 +33,7 @@ async def lifespan(app: FastAPI):
     STATE["q50"] = joblib.load(MODELS / "xgb_q50.joblib")
     STATE["q90"] = joblib.load(MODELS / "xgb_q90.joblib")
     print("Loading history...")
-    STATE["history"] = pd.read_pickle(PROC / "train.pkl")
+    STATE["history"] = pd.read_parquet(PROC / "history_small.parquet")
     print(f"Ready. history rows = {len(STATE['history'])}")
     yield
     STATE.clear()

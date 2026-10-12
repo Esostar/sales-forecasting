@@ -6,8 +6,7 @@ venv/
 .venv/
 data/raw/
 data/interim/
-data/processed/
-models/*.pkl
-models/*.joblib
+data/processed/*.pkl
 reports/figures/*.png
 .DS_Store
+repos/
