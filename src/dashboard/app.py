@@ -10,7 +10,8 @@ import requests
 ROOT = Path(__file__).resolve().parents[2]
 RAW = ROOT / "data" / "raw"
 PROC = ROOT / "data" / "processed"
-API_URL = "http://localhost:8000/forecast"
+import os
+API_URL = os.getenv("API_URL", "http://localhost:8000/forecast")
 
 st.set_page_config(page_title="Sales Forecasting Platform", layout="wide")
 
@@ -84,7 +85,7 @@ if page == "📊 Analytics":
     fig.add_trace(go.Scatter(x=daily.date, y=daily.sales, name="Daily", opacity=0.35))
     fig.add_trace(go.Scatter(x=daily.date, y=daily.roll_28, name="28-day avg", line=dict(width=3)))
     fig.update_layout(height=380)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
     st.divider()
 
@@ -98,7 +99,7 @@ if page == "📊 Analytics":
         colors = ["#2ecc71" if x > 0 else "#e74c3c" for x in top.yoy]
         fig = go.Figure(go.Bar(x=top.yoy, y=top.family, orientation="h", marker_color=colors))
         fig.update_layout(height=500, title="Top 10 growing / bottom 10 declining families")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
     else:
         st.info("Not enough years in selected range for YoY.")
 
@@ -113,7 +114,7 @@ if page == "📊 Analytics":
     fig = px.imshow(piv, aspect="auto", color_continuous_scale="YlOrRd",
                     labels=dict(x="Cluster", y="Family", color="Avg sales"))
     fig.update_layout(height=600)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
     st.divider()
 
@@ -127,7 +128,7 @@ if page == "📊 Analytics":
         fam["lift_pct"] = (fam.promo - fam.no_promo) / fam.no_promo.replace(0, np.nan) * 100
         top = fam.dropna().sort_values("lift_pct", ascending=False).head(15).reset_index()
         st.plotly_chart(px.bar(top, x="lift_pct", y="family", orientation="h"),
-                        use_container_width=True)
+                        width="stretch")
 
     # ---- Zero-sales % by family ----
     with col2:
@@ -137,7 +138,7 @@ if page == "📊 Analytics":
             lambda s: (s == 0).mean() * 100
         ).sort_values(ascending=False).reset_index(name="zero_pct")
         st.plotly_chart(px.bar(z, x="zero_pct", y="family", orientation="h"),
-                        use_container_width=True)
+                        width="stretch")
 
     st.divider()
 
@@ -151,7 +152,7 @@ if page == "📊 Analytics":
         h = df.groupby("is_holiday").sales.mean().reset_index()
         h["label"] = h.is_holiday.map({True: "Holiday", False: "Normal"})
         st.plotly_chart(px.bar(h, x="label", y="sales", title="Avg sales: Holiday vs Normal"),
-                        use_container_width=True)
+                        width="stretch")
 
     # ---- Transactions trend ----
     with col2:
@@ -163,7 +164,7 @@ if page == "📊 Analytics":
         fig.add_trace(go.Scatter(x=t_daily.date, y=t_daily.transactions, opacity=0.3, name="Daily"))
         fig.add_trace(go.Scatter(x=t_daily.date, y=t_daily.roll_28, name="28d avg", line=dict(width=3)))
         fig.update_layout(height=350)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     st.divider()
 
@@ -181,7 +182,7 @@ if page == "📊 Analytics":
         yaxis=dict(title="Sales (28d avg)"),
         yaxis2=dict(title="Oil price", overlaying="y", side="right"),
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 
 # ==================== FORECAST CONSOLE ====================
@@ -206,7 +207,7 @@ else:
             "onpromotion": int(promo),
         }
         try:
-            r = requests.post(API_URL, json=payload, timeout=10)
+            r = requests.post(API_URL, json=payload, timeout=60)
             r.raise_for_status()
             res = r.json()
 
@@ -230,6 +231,6 @@ else:
                 mode="markers", marker=dict(size=12, color="red"), name="Forecast",
             ))
             fig.update_layout(title="History + forecast", height=420)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
         except Exception as e:
             st.error(f"API error: {e}")

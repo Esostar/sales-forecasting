@@ -1,0 +1,24 @@
+services:
+  api:
+    build: .
+    container_name: sales-api
+    ports:
+      - "8000:8000"
+    command: uvicorn src.api.main:app --host 0.0.0.0 --port 8000
+    volumes:
+      - ./models:/app/models
+      - ./data/processed:/app/data/processed
+
+  dashboard:
+    build: .
+    container_name: sales-dashboard
+    ports:
+      - "8501:8501"
+    command: streamlit run src/dashboard/app.py --server.address 0.0.0.0 --server.port 8501
+    environment:
+      - API_URL=http://api:8000/forecast
+    volumes:
+      - ./data/raw:/app/data/raw
+      - ./data/processed:/app/data/processed
+    depends_on:
+      - api

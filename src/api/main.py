@@ -1,6 +1,6 @@
 """FastAPI service for store x family sales forecasting with prediction intervals."""
 from pathlib import Path
-from functools import lru_cache
+from contextlib import asynccontextmanager
 import numpy as np
 import pandas as pd
 import joblib
@@ -19,42 +19,42 @@ FEATURE_COLS = [
     "lag_7", "lag_14", "lag_21", "lag_28", "lag_364",
     "roll_mean_7", "roll_mean_14", "roll_mean_28",
     "roll_std_7", "roll_std_14", "roll_std_28",
+    "sin_1", "cos_1", "sin_2", "cos_2", "sin_3", "cos_3",
 ]
 
-app = FastAPI(title="Sales Forecasting API", version="0.1.0")
+STATE = {}
 
 
-@lru_cache(maxsize=1)
-def load_models():
-    return {
-        "point": joblib.load(MODELS / "xgb_v1.joblib"),
-        "q10": joblib.load(MODELS / "xgb_q10.joblib"),
-        "q50": joblib.load(MODELS / "xgb_q50.joblib"),
-        "q90": joblib.load(MODELS / "xgb_q90.joblib"),
-    }
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    print("Loading models...")
+    STATE["point"] = joblib.load(MODELS / "xgb_v1.joblib")
+    STATE["q10"] = joblib.load(MODELS / "xgb_q10.joblib")
+    STATE["q50"] = joblib.load(MODELS / "xgb_q50.joblib")
+    STATE["q90"] = joblib.load(MODELS / "xgb_q90.joblib")
+    print("Loading history...")
+    STATE["history"] = pd.read_pickle(PROC / "train.pkl")
+    print(f"Ready. history rows = {len(STATE['history'])}")
+    yield
+    STATE.clear()
 
 
-@lru_cache(maxsize=1)
-def load_history():
-    tr = pd.read_pickle(PROC / "train.pkl")
-    return tr
+app = FastAPI(title="Sales Forecasting API", version="0.2.0", lifespan=lifespan)
 
 
 class ForecastRequest(BaseModel):
     store_nbr: int = Field(..., ge=1, le=54)
     family_code: int = Field(..., ge=0)
-    date: str  # ISO format YYYY-MM-DD
+    date: str
     onpromotion: int = 0
 
 
 def build_features(req: ForecastRequest) -> pd.DataFrame:
-    hist = load_history()
+    hist = STATE["history"]
     d = pd.Timestamp(req.date)
 
-    # pull last 365+ days of this series to compute lags/rolls
     series = hist[(hist.store_nbr == req.store_nbr) &
                   (hist.family_code == req.family_code)].sort_values("date")
-
     if series.empty:
         raise HTTPException(404, f"No history for store={req.store_nbr}, family_code={req.family_code}")
 
@@ -70,6 +70,7 @@ def build_features(req: ForecastRequest) -> pd.DataFrame:
     def roll_std(w):
         return float(np.std(sales[-w:])) if len(sales) >= 2 else 0.0
 
+    doy = d.dayofyear
     row = {
         "store_nbr": req.store_nbr,
         "family_code": req.family_code,
@@ -88,25 +89,30 @@ def build_features(req: ForecastRequest) -> pd.DataFrame:
         "lag_28": lag(28), "lag_364": lag(364),
         "roll_mean_7": roll_mean(7), "roll_mean_14": roll_mean(14), "roll_mean_28": roll_mean(28),
         "roll_std_7": roll_std(7), "roll_std_14": roll_std(14), "roll_std_28": roll_std(28),
+        "sin_1": float(np.sin(2 * np.pi * 1 * doy / 365.25)),
+        "cos_1": float(np.cos(2 * np.pi * 1 * doy / 365.25)),
+        "sin_2": float(np.sin(2 * np.pi * 2 * doy / 365.25)),
+        "cos_2": float(np.cos(2 * np.pi * 2 * doy / 365.25)),
+        "sin_3": float(np.sin(2 * np.pi * 3 * doy / 365.25)),
+        "cos_3": float(np.cos(2 * np.pi * 3 * doy / 365.25)),
     }
     return pd.DataFrame([row])[FEATURE_COLS]
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "ready": "history" in STATE}
 
 
 @app.post("/forecast")
 def forecast(req: ForecastRequest):
-    models = load_models()
+    if "history" not in STATE:
+        raise HTTPException(503, "Service warming up")
     X = build_features(req)
-
-    point = float(np.clip(np.expm1(models["point"].predict(X))[0], 0, None))
-    q10 = float(np.clip(np.expm1(models["q10"].predict(X))[0], 0, None))
-    q50 = float(np.clip(np.expm1(models["q50"].predict(X))[0], 0, None))
-    q90 = float(np.clip(np.expm1(models["q90"].predict(X))[0], 0, None))
-
+    point = float(np.clip(np.expm1(STATE["point"].predict(X))[0], 0, None))
+    q10 = float(np.clip(np.expm1(STATE["q10"].predict(X))[0], 0, None))
+    q50 = float(np.clip(np.expm1(STATE["q50"].predict(X))[0], 0, None))
+    q90 = float(np.clip(np.expm1(STATE["q90"].predict(X))[0], 0, None))
     return {
         "store_nbr": req.store_nbr,
         "family_code": req.family_code,
