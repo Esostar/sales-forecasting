@@ -9,6 +9,7 @@ import requests
 
 ROOT = Path(__file__).resolve().parents[2]
 RAW = ROOT / "data" / "raw"
+PROC_DIR = ROOT / "data" / "processed"
 PROC = ROOT / "data" / "processed"
 import os
 API_URL = os.getenv("API_URL", "http://localhost:8000/forecast")
@@ -18,11 +19,15 @@ st.set_page_config(page_title="Sales Forecasting Platform", layout="wide")
 
 @st.cache_data
 def load_all():
-    train = pd.read_csv(RAW / "train.csv", parse_dates=["date"])
-    stores = pd.read_csv(RAW / "stores.csv")
-    oil = pd.read_csv(RAW / "oil.csv", parse_dates=["date"])
-    holidays = pd.read_csv(RAW / "holidays_events.csv", parse_dates=["date"])
-    transactions = pd.read_csv(RAW / "transactions.csv", parse_dates=["date"])
+    import json
+    train = pd.read_parquet(PROC_DIR / "dashboard_train.parquet")
+    stores = pd.read_csv(PROC_DIR / "stores.csv")
+    oil = pd.read_csv(PROC_DIR / "oil.csv", parse_dates=["date"])
+    holidays = pd.read_csv(PROC_DIR / "holidays_events.csv", parse_dates=["date"])
+    transactions = pd.read_csv(PROC_DIR / "transactions.csv", parse_dates=["date"])
+    with open(PROC_DIR / "families.json") as f:
+        fam_names = json.load(f)
+    train["family"] = pd.Categorical(train["family"], categories=fam_names)
     train = train.merge(stores, on="store_nbr", how="left")
     train["dow"] = train.date.dt.dayofweek
     train["month"] = train.date.dt.month
@@ -189,7 +194,8 @@ if page == "📊 Analytics":
 else:
     st.title("🔮 Forecast Console")
 
-    fam_map = pd.read_csv(RAW / "train.csv").family.astype("category").cat.categories
+    import json
+    fam_map = json.load(open(PROC_DIR / "families.json"))
     families = list(enumerate(fam_map))
 
     col1, col2, col3, col4 = st.columns(4)
